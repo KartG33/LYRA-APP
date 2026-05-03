@@ -35,7 +35,7 @@
   <div class="logo">LYRA</div>
   <div class="header-file" id="header-file">CONVERSATION VIEWER</div>
   <button class="btn-load" id="btn-load">↑ Загрузить</button>
-  <input type="file" id="file-input" accept=".json">
+  <input type="file" id="file-input" accept=".json" style="display:none">
 </header>
 
 <!-- ── OVERLAY ── -->
@@ -47,13 +47,22 @@
   <!-- SIDEBAR -->
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-inner">
-      <div class="sidebar-label">Запросы</div>
+      <div class="sidebar-label">Файлы</div>
       <div id="nav-list"></div>
     </div>
   </nav>
 
   <!-- MAIN -->
   <main class="main">
+
+    <!-- SEARCH BAR -->
+    <div id="search-bar" style="display:none">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="search-input" class="search-input" placeholder="Поиск по теме, артисту, тексту...">
+        <span id="search-count" class="search-count" style="display:none"></span>
+      </div>
+    </div>
 
     <!-- UPLOAD SCREEN -->
     <div id="upload-screen">

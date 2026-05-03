@@ -13,6 +13,7 @@ export function renderPairs(messages) {
 
   const container = document.getElementById('pairs-container');
   container.innerHTML = '';
+  _id = 0;
 
   const navData = [];
 
@@ -21,17 +22,22 @@ export function renderPairs(messages) {
     const a = parseAssistant(pair.assistant);
     const isError = pair.assistant.toLowerCase().includes('something went wrong');
 
-    navData.push({ artist: u.artist_name, idx });
+    navData.push({ artist: u.artist_name, theme: u.core_theme, idx });
 
     const el = document.createElement('div');
     el.className = 'pair';
     el.id = `pair-${idx}`;
+    el.dataset.artist = (u.artist_name || '').toLowerCase();
+    el.dataset.theme  = (u.core_theme  || '').toLowerCase();
+    el.dataset.lyrics = (a.lyrics      || '').toLowerCase().slice(0, 300);
     el.style.animationDelay = `${idx * 0.04}s`;
 
     el.innerHTML = `
-      <div class="pair-index">— #${idx + 1} · ${esc(u.artist_name || '—')} —</div>
+      <div class="pair-index">
+        <span>— #${idx + 1} · ${esc(u.artist_name || '—')} —</span>
+        ${!isError ? `<button class="btn-copy-all" onclick="window.__lyra_copy_all(${idx},this)">⎘ скопировать всё</button>` : ''}
+      </div>
 
-      <!-- ASSISTANT: Lyrics always visible -->
       <div class="card card-assistant">
         <div class="card-header">
           <span class="role-badge assistant">Lyrics</span>
@@ -42,22 +48,23 @@ export function renderPairs(messages) {
             ? `<div class="err-badge">⚠ Ошибка генерации</div>`
             : `
             ${a.production ? `
-            <div class="production-block">
-              <div class="prod-label">Production</div>
-              ${cb('', a.production, true)}
-            </div>` : ''}
-            ${cb('', a.lyrics, false, true)}
-            `
-          }
+              <button class="btn-prod-toggle" onclick="window.__lyra_toggle_prod('prod-${idx}',this)">
+                <span class="prod-arrow">▸</span> Production
+              </button>
+              <div class="prod-collapse" id="prod-${idx}">
+                ${cb('', a.production, true)}
+              </div>
+            ` : ''}
+            <div id="lyrics-${idx}">${cb('', a.lyrics, false, true)}</div>
+          `}
         </div>
       </div>
 
-      <!-- TOGGLE BUTTON -->
-      <button class="btn-show-request" data-idx="${idx}" onclick="window.__lyra_toggle(this)">
-        <span class="toggle-arrow">↓</span> показать запрос
+      <button class="btn-show-request" onclick="window.__lyra_toggle_user('user-block-${idx}',this)">
+        <span class="req-arrow">↓</span>
+        <span class="req-label">показать запрос</span>
       </button>
 
-      <!-- USER: collapsed by default -->
       <div class="card card-user user-collapse" id="user-block-${idx}">
         <div class="card-header">
           <span class="role-badge user">User · Parameters</span>
@@ -70,16 +77,14 @@ export function renderPairs(messages) {
           ${cb('Banned Words',      u.banned_words,   true)}
           ${cb('Length',            u.length)}
           ${cb('Explicit Language', u.explicit)}
-
           <div class="spacer"></div>
           <div class="sec-title u">Rhyme Controls</div>
-          ${cb('Rhyme Density',      u.rhyme_density)}
-          ${cb('Rhyme Complexity',   u.rhyme_complexity)}
-          ${u.rhyme_placement  ? cb('Rhyme Placement',    u.rhyme_placement,  true) : ''}
-          ${u.rhyme_quality    ? cb('Rhyme Quality',      u.rhyme_quality,    true) : ''}
-          ${u.struct_patterns  ? cb('Structure Patterns', u.struct_patterns,  true) : ''}
-          ${u.poetic_forms     ? cb('Poetic Forms',       u.poetic_forms,     true) : ''}
-
+          ${cb('Rhyme Density',     u.rhyme_density)}
+          ${cb('Rhyme Complexity',  u.rhyme_complexity)}
+          ${u.rhyme_placement ? cb('Rhyme Placement',    u.rhyme_placement,  true) : ''}
+          ${u.rhyme_quality   ? cb('Rhyme Quality',      u.rhyme_quality,    true) : ''}
+          ${u.struct_patterns ? cb('Structure Patterns', u.struct_patterns,  true) : ''}
+          ${u.poetic_forms    ? cb('Poetic Forms',       u.poetic_forms,     true) : ''}
           <div class="spacer"></div>
           <div class="sec-title u">Prompt</div>
           ${cb('', u.prompt, false, true)}
@@ -107,25 +112,48 @@ function cb(label, value, scroll = false, large = false) {
 }
 
 function esc(s) {
-  return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── TOGGLE USER BLOCK ────────────────────────────────────────
-window.__lyra_toggle = function(btn) {
-  const idx = btn.dataset.idx;
-  const block = document.getElementById(`user-block-${idx}`);
-  const arrow = btn.querySelector('.toggle-arrow');
+// ── TOGGLES ──────────────────────────────────────────────────
+window.__lyra_toggle_user = function(blockId, btn) {
+  const block = document.getElementById(blockId);
   const isOpen = block.classList.toggle('open');
-  arrow.textContent = isOpen ? '↑' : '↓';
-  btn.innerHTML = `<span class="toggle-arrow">${isOpen ? '↑' : '↓'}</span> ${isOpen ? 'скрыть запрос' : 'показать запрос'}`;
-  btn.dataset.idx = idx; // restore after innerHTML
+  btn.querySelector('.req-arrow').textContent  = isOpen ? '↑' : '↓';
+  btn.querySelector('.req-label').textContent  = isOpen ? 'скрыть запрос' : 'показать запрос';
+  btn.classList.toggle('active', isOpen);
 };
 
-// ── COPY FN ──────────────────────────────────────────────────
+window.__lyra_toggle_prod = function(blockId, btn) {
+  const block = document.getElementById(blockId);
+  const isOpen = block.classList.toggle('open');
+  btn.querySelector('.prod-arrow').style.transform = isOpen ? 'rotate(90deg)' : 'rotate(0)';
+  btn.classList.toggle('active', isOpen);
+};
+
+// ── COPY ALL ─────────────────────────────────────────────────
+window.__lyra_copy_all = function(idx, btn) {
+  const parts = [];
+  const prod = document.getElementById(`prod-${idx}`);
+  const lyrics = document.getElementById(`lyrics-${idx}`);
+
+  [['--- PRODUCTION ---', prod], ['--- LYRICS ---', lyrics]].forEach(([label, el]) => {
+    if (!el) return;
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.cp,.btn-prod-toggle').forEach(b => b.remove());
+    const t = (clone.innerText || clone.textContent).trim();
+    if (t) parts.push(label + '\n' + t);
+  });
+
+  navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
+    const orig = btn.innerHTML;
+    btn.textContent = '✓ скопировано';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('ok'); }, 2000);
+  });
+};
+
+// ── COPY SINGLE ──────────────────────────────────────────────
 window.__lyra_copy = function(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -137,3 +165,18 @@ window.__lyra_copy = function(id, btn) {
     setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('ok'); }, 1800);
   });
 };
+
+// ── SEARCH ───────────────────────────────────────────────────
+export function filterPairs(query) {
+  const q = (query || '').toLowerCase().trim();
+  let visible = 0;
+  document.querySelectorAll('.pair').forEach(pair => {
+    const match = !q
+      || (pair.dataset.artist || '').includes(q)
+      || (pair.dataset.theme  || '').includes(q)
+      || (pair.dataset.lyrics || '').includes(q);
+    pair.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  return visible;
+}

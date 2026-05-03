@@ -1,7 +1,9 @@
 import { getFiles, loadFile, deleteFile } from './storage.js';
+import { filterPairs } from './render.js';
 
 let observer = null;
 let _onFileSelect = null;
+let _currentFileId = null;
 
 export function initSidebar(onFileSelect) {
   _onFileSelect = onFileSelect;
@@ -24,14 +26,15 @@ export function renderFileList() {
     item.dataset.id = f.id;
 
     const date = new Date(f.savedAt).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' });
-    const shortName = f.name.replace(/\.json$/i, '').slice(0, 28);
+    const shortName = f.name.replace(/\.json$/i, '').slice(0, 26);
+    const count = f.pairCount != null ? f.pairCount : '';
 
     item.innerHTML = `
       <div class="file-item-main" data-id="${f.id}">
         <span class="file-icon">▸</span>
         <div class="file-info">
           <div class="file-name">${esc(shortName)}</div>
-          <div class="file-date">${date}</div>
+          <div class="file-meta">${date}${count ? ` · ${count} зап.` : ''}</div>
         </div>
         <button class="file-del" data-id="${f.id}" title="Удалить">✕</button>
       </div>
@@ -56,29 +59,40 @@ export function renderFileList() {
 }
 
 function selectFile(id, itemEl) {
-  // deactivate all
   document.querySelectorAll('.file-item-main').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.file-pairs').forEach(el => el.style.display = 'none');
-
   itemEl.querySelector('.file-item-main').classList.add('active');
   const pairsNav = itemEl.querySelector('.file-pairs');
   pairsNav.style.display = 'block';
 
+  _currentFileId = id;
   const saved = loadFile(id);
-  if (saved && _onFileSelect) {
-    _onFileSelect(saved.data, saved.name, id);
-  }
+  if (saved && _onFileSelect) _onFileSelect(saved.data, saved.name, id);
 }
 
 export function buildNav(pairs, fileId) {
   const pairsNav = document.getElementById(`pairs-nav-${fileId}`);
   if (!pairsNav) return;
-  pairsNav.innerHTML = '';
+
+  // Build artist filter list
+  const artists = [...new Set(pairs.map(p => p.artist).filter(Boolean))];
+
+  let filterHTML = '';
+  if (artists.length > 1) {
+    filterHTML = `
+      <div class="artist-filter">
+        <span class="artist-chip active" data-artist="">все</span>
+        ${artists.map(a => `<span class="artist-chip" data-artist="${esc(a.toLowerCase())}">${esc(a)}</span>`).join('')}
+      </div>`;
+  }
+
+  pairsNav.innerHTML = filterHTML;
 
   pairs.forEach(({ artist, idx }) => {
     const item = document.createElement('div');
     item.className = 'nav-item';
     item.dataset.idx = idx;
+    item.dataset.artist = (artist || '').toLowerCase();
     item.innerHTML = `
       <span class="nav-num">#${idx + 1}</span>
       <span class="nav-artist">${esc(artist || '—')}</span>
@@ -89,25 +103,32 @@ export function buildNav(pairs, fileId) {
     });
     pairsNav.appendChild(item);
   });
+
+  // Artist chip filter
+  pairsNav.querySelectorAll('.artist-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      pairsNav.querySelectorAll('.artist-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const artist = chip.dataset.artist;
+      pairsNav.querySelectorAll('.nav-item').forEach(item => {
+        item.style.display = (!artist || item.dataset.artist === artist) ? '' : 'none';
+      });
+    });
+  });
 }
 
 export function initObserver() {
   if (observer) observer.disconnect();
-
   observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         const idx = entry.target.id.replace('pair-', '');
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         const active = document.querySelector(`.nav-item[data-idx="${idx}"]`);
-        if (active) {
-          active.classList.add('active');
-          active.scrollIntoView({ block: 'nearest' });
-        }
+        if (active) { active.classList.add('active'); active.scrollIntoView({ block: 'nearest' }); }
       }
     });
   }, { rootMargin: '-15% 0px -70% 0px' });
-
   document.querySelectorAll('.pair').forEach(p => observer.observe(p));
 }
 
@@ -127,5 +148,5 @@ export function closeSidebar() {
 }
 
 function esc(s) {
-  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
