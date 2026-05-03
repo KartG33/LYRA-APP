@@ -1,6 +1,6 @@
 import { renderPairs } from './render.js';
-import { buildNav, initObserver, toggleSidebar, closeSidebar } from './sidebar.js';
-import { saveFile, loadSaved } from './storage.js';
+import { buildNav, initObserver, toggleSidebar, closeSidebar, initSidebar, renderFileList } from './sidebar.js';
+import { saveFile, loadFile, getLastFileId } from './storage.js';
 
 // ── PWA SERVICE WORKER ───────────────────────────────────────
 if ('serviceWorker' in navigator) {
@@ -34,8 +34,22 @@ function handleFile(file) {
   reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
-      saveFile(e.target.result, file.name);
-      loadData(data, file.name);
+      const id = saveFile(e.target.result, file.name);
+      renderFileList();
+      loadData(data, file.name, id);
+      // activate sidebar item
+      setTimeout(() => {
+        const item = document.querySelector(`.file-item[data-id="${id}"] .file-item-main`);
+        if (item) {
+          document.querySelectorAll('.file-item-main').forEach(el => el.classList.remove('active'));
+          item.classList.add('active');
+          const pairsNav = document.getElementById(`pairs-nav-${id}`);
+          if (pairsNav) {
+            document.querySelectorAll('.file-pairs').forEach(el => el.style.display = 'none');
+            pairsNav.style.display = 'block';
+          }
+        }
+      }, 50);
     } catch {
       alert('Ошибка парсинга JSON');
     }
@@ -44,31 +58,49 @@ function handleFile(file) {
 }
 
 // ── LOAD DATA ────────────────────────────────────────────────
-function loadData(data, filename) {
+let _currentFileId = null;
+
+function loadData(data, filename, fileId) {
+  _currentFileId = fileId;
   const messages = data.messages || [];
   const exp = data.exportedAt ? new Date(data.exportedAt).toLocaleString('ru-RU') : '';
 
-  // count pairs
   let pairCount = 0;
   for (let i = 0; i < messages.length - 1; i++) {
     if (messages[i].role === 'user' && messages[i + 1].role === 'assistant') { pairCount++; i++; }
   }
 
   document.getElementById('header-file').innerHTML =
-    `<strong>${esc(filename)}</strong> · ${pairCount} запрос${pairCount === 1 ? '' : 'ов'} · ${exp}`;
+    `<strong>${esc(filename)}</strong> · ${pairCount} запрос${pairCount === 1 ? '' : 'ов'}${exp ? ' · ' + exp : ''}`;
 
   const navData = renderPairs(messages);
-  buildNav(navData);
+  buildNav(navData, fileId);
   initObserver();
 
   uploadScreen.style.display = 'none';
   document.getElementById('pairs-container').style.display = 'block';
 }
 
-// ── AUTO-RESTORE ─────────────────────────────────────────────
+// ── INIT ─────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  const saved = loadSaved();
-  if (saved) loadData(saved.data, saved.name);
+  initSidebar((data, name, id) => loadData(data, name, id));
+
+  // auto-open last file
+  const lastId = getLastFileId();
+  if (lastId) {
+    const saved = loadFile(lastId);
+    if (saved) {
+      loadData(saved.data, saved.name, lastId);
+      setTimeout(() => {
+        const item = document.querySelector(`.file-item[data-id="${lastId}"] .file-item-main`);
+        if (item) {
+          item.classList.add('active');
+          const pairsNav = document.getElementById(`pairs-nav-${lastId}`);
+          if (pairsNav) pairsNav.style.display = 'block';
+        }
+      }, 50);
+    }
+  }
 });
 
 // ── SIDEBAR ──────────────────────────────────────────────────

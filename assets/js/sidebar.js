@@ -1,8 +1,79 @@
-let observer = null;
+import { getFiles, loadFile, deleteFile } from './storage.js';
 
-export function buildNav(pairs) {
+let observer = null;
+let _onFileSelect = null;
+
+export function initSidebar(onFileSelect) {
+  _onFileSelect = onFileSelect;
+  renderFileList();
+}
+
+export function renderFileList() {
+  const files = getFiles();
   const navList = document.getElementById('nav-list');
   navList.innerHTML = '';
+
+  if (!files.length) {
+    navList.innerHTML = `<div class="nav-empty">Нет сохранённых файлов</div>`;
+    return;
+  }
+
+  files.forEach(f => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    item.dataset.id = f.id;
+
+    const date = new Date(f.savedAt).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' });
+    const shortName = f.name.replace(/\.json$/i, '').slice(0, 28);
+
+    item.innerHTML = `
+      <div class="file-item-main" data-id="${f.id}">
+        <span class="file-icon">▸</span>
+        <div class="file-info">
+          <div class="file-name">${esc(shortName)}</div>
+          <div class="file-date">${date}</div>
+        </div>
+        <button class="file-del" data-id="${f.id}" title="Удалить">✕</button>
+      </div>
+      <div class="file-pairs" id="pairs-nav-${f.id}" style="display:none"></div>
+    `;
+
+    item.querySelector('.file-item-main').addEventListener('click', (e) => {
+      if (e.target.classList.contains('file-del')) return;
+      selectFile(f.id, item);
+    });
+
+    item.querySelector('.file-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`Удалить "${f.name}"?`)) {
+        deleteFile(f.id);
+        renderFileList();
+      }
+    });
+
+    navList.appendChild(item);
+  });
+}
+
+function selectFile(id, itemEl) {
+  // deactivate all
+  document.querySelectorAll('.file-item-main').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.file-pairs').forEach(el => el.style.display = 'none');
+
+  itemEl.querySelector('.file-item-main').classList.add('active');
+  const pairsNav = itemEl.querySelector('.file-pairs');
+  pairsNav.style.display = 'block';
+
+  const saved = loadFile(id);
+  if (saved && _onFileSelect) {
+    _onFileSelect(saved.data, saved.name, id);
+  }
+}
+
+export function buildNav(pairs, fileId) {
+  const pairsNav = document.getElementById(`pairs-nav-${fileId}`);
+  if (!pairsNav) return;
+  pairsNav.innerHTML = '';
 
   pairs.forEach(({ artist, idx }) => {
     const item = document.createElement('div');
@@ -16,7 +87,7 @@ export function buildNav(pairs) {
       document.getElementById(`pair-${idx}`)?.scrollIntoView({ behavior: 'smooth' });
       closeSidebar();
     });
-    navList.appendChild(item);
+    pairsNav.appendChild(item);
   });
 }
 

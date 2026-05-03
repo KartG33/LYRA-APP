@@ -29,24 +29,50 @@ export function renderPairs(messages) {
     el.style.animationDelay = `${idx * 0.04}s`;
 
     el.innerHTML = `
-      <div class="pair-index">— запрос #${idx + 1} —</div>
+      <div class="pair-index">— #${idx + 1} · ${esc(u.artist_name || '—')} —</div>
 
-      <!-- USER -->
-      <div class="card">
+      <!-- ASSISTANT: Lyrics always visible -->
+      <div class="card card-assistant">
         <div class="card-header">
-          <span class="role-badge user">User</span>
+          <span class="role-badge assistant">Lyrics</span>
+          ${a.modelInfo ? `<span class="model-info-pill">${esc(a.modelInfo)}</span>` : ''}
         </div>
         <div class="card-body">
-          <div class="sec-title u">Parameters · Lyrics Settings</div>
+          ${isError
+            ? `<div class="err-badge">⚠ Ошибка генерации</div>`
+            : `
+            ${a.production ? `
+            <div class="production-block">
+              <div class="prod-label">Production</div>
+              ${cb('', a.production, true)}
+            </div>` : ''}
+            ${cb('', a.lyrics, false, true)}
+            `
+          }
+        </div>
+      </div>
+
+      <!-- TOGGLE BUTTON -->
+      <button class="btn-show-request" data-idx="${idx}" onclick="window.__lyra_toggle(this)">
+        <span class="toggle-arrow">↓</span> показать запрос
+      </button>
+
+      <!-- USER: collapsed by default -->
+      <div class="card card-user user-collapse" id="user-block-${idx}">
+        <div class="card-header">
+          <span class="role-badge user">User · Parameters</span>
+        </div>
+        <div class="card-body">
+          <div class="sec-title u">Lyrics Settings</div>
           ${cb('Artist Name',       u.artist_name)}
           ${cb('Core Theme',        u.core_theme,    true)}
-          ${cb('Mood Tag',          u.mood_tag,      true)}
-          ${cb('Banned Words',      u.banned_words,  true)}
+          ${cb('Mood Tag',          u.mood_tag,       true)}
+          ${cb('Banned Words',      u.banned_words,   true)}
           ${cb('Length',            u.length)}
           ${cb('Explicit Language', u.explicit)}
 
           <div class="spacer"></div>
-          <div class="sec-title u">Parameters · Rhyme Controls</div>
+          <div class="sec-title u">Rhyme Controls</div>
           ${cb('Rhyme Density',      u.rhyme_density)}
           ${cb('Rhyme Complexity',   u.rhyme_complexity)}
           ${u.rhyme_placement  ? cb('Rhyme Placement',    u.rhyme_placement,  true) : ''}
@@ -57,27 +83,6 @@ export function renderPairs(messages) {
           <div class="spacer"></div>
           <div class="sec-title u">Prompt</div>
           ${cb('', u.prompt, false, true)}
-        </div>
-      </div>
-
-      <!-- ASSISTANT -->
-      <div class="card">
-        <div class="card-header">
-          <span class="role-badge assistant">Assistant</span>
-        </div>
-        <div class="card-body">
-          ${isError
-            ? `<div class="err-badge">⚠ Ошибка генерации</div>`
-            : `
-          <div class="sec-title a">Model Info</div>
-          ${cb('', a.modelInfo)}
-          <div class="spacer"></div>
-          <div class="sec-title a">Production</div>
-          ${cb('', a.production, true)}
-          <div class="spacer"></div>
-          <div class="sec-title a">Lyrics</div>
-          ${cb('', a.lyrics, false, true)}
-          `}
         </div>
       </div>
     `;
@@ -109,7 +114,18 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
-// expose copy fn globally (needed for inline onclick)
+// ── TOGGLE USER BLOCK ────────────────────────────────────────
+window.__lyra_toggle = function(btn) {
+  const idx = btn.dataset.idx;
+  const block = document.getElementById(`user-block-${idx}`);
+  const arrow = btn.querySelector('.toggle-arrow');
+  const isOpen = block.classList.toggle('open');
+  arrow.textContent = isOpen ? '↑' : '↓';
+  btn.innerHTML = `<span class="toggle-arrow">${isOpen ? '↑' : '↓'}</span> ${isOpen ? 'скрыть запрос' : 'показать запрос'}`;
+  btn.dataset.idx = idx; // restore after innerHTML
+};
+
+// ── COPY FN ──────────────────────────────────────────────────
 window.__lyra_copy = function(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
