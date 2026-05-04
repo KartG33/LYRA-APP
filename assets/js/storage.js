@@ -21,31 +21,78 @@ function saveLibDB(db) {
 }
 
 // ── AUTO NAME ────────────────────────────────────────────────
-function autoName(jsonData) {
-  // Try exportedAt first, then current date
+function autoName(parsed) {
   let d;
-  try {
-    const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
-    d = parsed.exportedAt ? new Date(parsed.exportedAt) : new Date();
-  } catch { d = new Date(); }
-  const dd = String(d.getDate()).padStart(2,'0');
-  const mm = String(d.getMonth()+1).padStart(2,'0');
+  try { d = parsed.exportedAt ? new Date(parsed.exportedAt) : new Date(); }
+  catch { d = new Date(); }
+
+  const dd   = String(d.getDate()).padStart(2,'0');
+  const mm   = String(d.getMonth()+1).padStart(2,'0');
   const yyyy = d.getFullYear();
-  return `${dd}.${mm}.${yyyy}`;
+  const hh   = String(d.getHours()).padStart(2,'0');
+  const min  = String(d.getMinutes()).padStart(2,'0');
+
+  // extract first artist_name from first user message
+  let artist = '';
+  try {
+    const messages = parsed.messages || [];
+    const firstUser = messages.find(m => m.role === 'user');
+    if (firstUser) {
+      const match = firstUser.content.match(/artist[_\s]name\s*:\s*([^,\n]+)/i);
+      if (match) artist = match[1].trim();
+    }
+  } catch {}
+
+  const base = `${dd}.${mm}.${yyyy} · ${hh}:${min}`;
+  return artist ? `${base} · ${artist}` : base;
+}
+
+// ── CHAT FINGERPRINT ─────────────────────────────────────────
+// Hash of the first user message content — identifies same chat
+function fingerprint(parsed) {
+  try {
+    const messages = parsed.messages || [];
+    const firstUser = messages.find(m => m.role === 'user');
+    if (!firstUser) return null;
+    // simple djb2 hash
+    let h = 5381;
+    const s = firstUser.content.slice(0, 500);
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) + h) ^ s.charCodeAt(i);
+      h = h >>> 0;
+    }
+    return h.toString(36);
+  } catch { return null; }
 }
 
 // ── FILES API ────────────────────────────────────────────────
 export function saveFile(jsonStr, _originalFilename, pairCount) {
   const db = getDB();
-  const name = autoName(jsonStr);
-  // allow duplicates by date — add suffix if needed
-  let finalName = name;
-  let suffix = 2;
-  while (db.find(f => f.name === finalName)) {
-    finalName = `${name} (${suffix++})`;
+  let parsed;
+  try { parsed = JSON.parse(jsonStr); } catch { parsed = {}; }
+
+  const fp = fingerprint(parsed);
+
+  // check for same chat (same fingerprint = same chat, just re-exported)
+  if (fp) {
+    const existing = db.find(f => f.fp === fp);
+    if (existing) {
+      // auto-replace: update data, pairCount, savedAt — keep name, libId, id
+      existing.data      = jsonStr;
+      existing.pairCount = pairCount || existing.pairCount;
+      existing.savedAt   = Date.now();
+      // move to top
+      const idx = db.indexOf(existing);
+      db.splice(idx, 1);
+      db.unshift(existing);
+      saveDB(db);
+      return existing.id;
+    }
   }
-  const id = 'f_' + Date.now();
-  db.unshift({ id, name: finalName, data: jsonStr, savedAt: Date.now(), pairCount: pairCount || 0, libId: null });
+
+  const id   = 'f_' + Date.now();
+  const name = autoName(parsed);
+  db.unshift({ id, name, data: jsonStr, savedAt: Date.now(), pairCount: pairCount || 0, libId: null, fp: fp || id });
   saveDB(db);
   return id;
 }
