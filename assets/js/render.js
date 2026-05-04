@@ -99,7 +99,6 @@ export function renderPairs(messages) {
   return navData;
 }
 
-// ── COPY BLOCK ───────────────────────────────────────────────
 function cb(label, value, scroll = false, large = false) {
   if (!value && value !== 0) return '';
   const id = 'cb' + (++_id);
@@ -115,12 +114,11 @@ function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── TOGGLES ──────────────────────────────────────────────────
 window.__lyra_toggle_user = function(blockId, btn) {
   const block = document.getElementById(blockId);
   const isOpen = block.classList.toggle('open');
-  btn.querySelector('.req-arrow').textContent  = isOpen ? '↑' : '↓';
-  btn.querySelector('.req-label').textContent  = isOpen ? 'скрыть запрос' : 'показать запрос';
+  btn.querySelector('.req-arrow').textContent = isOpen ? '↑' : '↓';
+  btn.querySelector('.req-label').textContent = isOpen ? 'скрыть запрос' : 'показать запрос';
   btn.classList.toggle('active', isOpen);
 };
 
@@ -131,12 +129,10 @@ window.__lyra_toggle_prod = function(blockId, btn) {
   btn.classList.toggle('active', isOpen);
 };
 
-// ── COPY ALL ─────────────────────────────────────────────────
 window.__lyra_copy_all = function(idx, btn) {
   const parts = [];
-  const prod = document.getElementById(`prod-${idx}`);
+  const prod   = document.getElementById(`prod-${idx}`);
   const lyrics = document.getElementById(`lyrics-${idx}`);
-
   [['--- PRODUCTION ---', prod], ['--- LYRICS ---', lyrics]].forEach(([label, el]) => {
     if (!el) return;
     const clone = el.cloneNode(true);
@@ -144,7 +140,6 @@ window.__lyra_copy_all = function(idx, btn) {
     const t = (clone.innerText || clone.textContent).trim();
     if (t) parts.push(label + '\n' + t);
   });
-
   navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
     const orig = btn.innerHTML;
     btn.textContent = '✓ скопировано';
@@ -153,7 +148,6 @@ window.__lyra_copy_all = function(idx, btn) {
   });
 };
 
-// ── COPY SINGLE ──────────────────────────────────────────────
 window.__lyra_copy = function(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -166,7 +160,6 @@ window.__lyra_copy = function(id, btn) {
   });
 };
 
-// ── SEARCH ───────────────────────────────────────────────────
 export function filterPairs(query) {
   const q = (query || '').toLowerCase().trim();
   let visible = 0;
