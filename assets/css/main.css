@@ -810,6 +810,31 @@ header {
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
+/* ── TOAST ── */
+#lyra-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text2);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  padding: 9px 20px;
+  z-index: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+#lyra-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* ── MOBILE ── */
 @media (max-width: 720px) {
   :root { --sidebar-w: 230px; }

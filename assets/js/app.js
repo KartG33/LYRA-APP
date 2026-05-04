@@ -13,14 +13,17 @@ if ('serviceWorker' in navigator) {
 const fileInput = document.getElementById('file-input');
 document.getElementById('btn-load').addEventListener('click', () => fileInput.click());
 document.getElementById('btn-upload').addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFiles(Array.from(fileInput.files));
+});
 
 const uploadScreen = document.getElementById('upload-screen');
 uploadScreen.addEventListener('dragover', e => { e.preventDefault(); uploadScreen.classList.add('over'); });
 uploadScreen.addEventListener('dragleave', () => uploadScreen.classList.remove('over'));
 uploadScreen.addEventListener('drop', e => {
   e.preventDefault(); uploadScreen.classList.remove('over');
-  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.json'));
+  if (files.length) handleFiles(files);
 });
 
 function countPairs(messages) {
@@ -31,32 +34,84 @@ function countPairs(messages) {
   return n;
 }
 
-function handleFile(file) {
-  const reader = new FileReader();
-  reader.onload = e => {
+// ── BATCH FILE HANDLER ───────────────────────────────────────
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  // show progress if more than 1 file
+  const multi = files.length > 1;
+  let toast = null;
+  if (multi) {
+    toast = showToast(`Загрузка 0 / ${files.length}...`);
+  }
+
+  let lastId = null;
+  let errors = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    if (toast) toast.setText(`Загрузка ${i + 1} / ${files.length}...`);
     try {
-      const jsonStr = e.target.result;
-      const data = JSON.parse(jsonStr);
-      const pairCount = countPairs(data.messages || []);
-      const id = saveFile(jsonStr, file.name, pairCount);
-      renderFileList();
-      loadData(data, id);
-      // activate in sidebar
+      const { id } = await readFile(files[i]);
+      lastId = id;
+    } catch {
+      errors++;
+    }
+  }
+
+  renderFileList();
+
+  if (toast) toast.remove();
+  if (errors) showToast(`⚠ Не удалось загрузить: ${errors} файл(ов)`, 3000);
+
+  // open the last successfully loaded file
+  if (lastId) {
+    const saved = loadFile(lastId);
+    if (saved) {
+      loadData(saved.data, lastId);
       setTimeout(() => {
-        const main = document.querySelector(`.file-item-main[data-id="${id}"]`);
-        if (main) {
-          document.querySelectorAll('.file-item-main').forEach(el => el.classList.remove('active'));
-          main.classList.add('active');
-          const pairsNav = document.getElementById(`pairs-nav-${id}`);
-          if (pairsNav) {
-            document.querySelectorAll('.file-pairs').forEach(el => el.style.display = 'none');
-            pairsNav.style.display = 'block';
-          }
-        }
+        document.querySelectorAll('.file-item-main').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.file-pairs').forEach(el => el.style.display = 'none');
+        const main = document.querySelector(`.file-item-main[data-id="${lastId}"]`);
+        const pn   = document.getElementById(`pairs-nav-${lastId}`);
+        if (main) main.classList.add('active');
+        if (pn)   pn.style.display = 'block';
       }, 60);
-    } catch { alert('Ошибка парсинга JSON'); }
+    }
+  }
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const jsonStr = e.target.result;
+        const data = JSON.parse(jsonStr);
+        const pairCount = countPairs(data.messages || []);
+        const id = saveFile(jsonStr, file.name, pairCount);
+        resolve({ id, data });
+      } catch { reject(new Error('parse error')); }
+    };
+    reader.onerror = () => reject(new Error('read error'));
+    reader.readAsText(file);
+  });
+}
+
+// ── TOAST ────────────────────────────────────────────────────
+function showToast(text, autoDismiss = 0) {
+  let el = document.getElementById('lyra-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'lyra-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.classList.add('visible');
+  if (autoDismiss) setTimeout(() => el.classList.remove('visible'), autoDismiss);
+  return {
+    setText: t => { el.textContent = t; },
+    remove:  () => el.classList.remove('visible'),
   };
-  reader.readAsText(file);
 }
 
 // ── LOAD DATA ────────────────────────────────────────────────
